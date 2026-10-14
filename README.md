@@ -53,8 +53,9 @@ Four templates, one per kind of folder:
 No film is used twice across all 247 covers. `build/hero_overrides.json` holds the hand-picked stills,
 `build/logo_overrides.json` the franchise logos, `build/tweaks.json` per-tile adjustments.
 
-Covers reference `https://cdn.jsdelivr.net/gh/mali-king/nuvio-collections@v1/covers/...`. They load
-once this repo is public on GitHub with a `v1` tag. To host them elsewhere, set `COVER_BASE` and rerun.
+Covers are served from this repo at the `v1` tag
+(`https://raw.githubusercontent.com/mali-king/nuvio-collections/v1/covers/...`), so they never change
+under you. To publish new covers, push a new tag and rerun with `COVER_BASE` pointing at it.
 
 ## Import into the new account
 
