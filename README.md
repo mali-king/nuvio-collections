@@ -40,22 +40,28 @@ automatically; `build/report.txt` lists every rail with its count and first titl
 
 ## Covers
 
-Four templates, one per kind of folder:
+Nuvio draws a folder tile about 288pt wide on the Mac and 206pt on a phone, so the covers carry only what
+reads at that size: no small labels, titles fitted to one or two lines. Four templates, one per kind of folder:
 
-- **Brand** (services, studios, networks): a tilted wall of that brand's own posters, darkened, with the
-  logo in a fixed-size box so every logo reads at the same optical size.
+- **Brand** (services, studios, networks): a tilted wall of that brand's own posters with a glow in the
+  brand's colour, and the logo sized by area and ink weight so wide, square and thin logos read alike.
 - **Scene** (genres, moods, world and Indian cinema, decades, critics' picks): a textless still from one
-  hand-picked film, graded, with the title set in SF Pro. Indian and world cinema add the name in its own
-  script.
-- **Franchise**: a still plus the franchise's official title logo.
-- **Director**: a black-and-white portrait, the name in New York serif, and their three most-voted films.
+  hand-picked film, exposure-matched, with the title set in SF Pro. Indian and world cinema add the name in
+  its own script.
+- **Franchise**: a still plus the series' title logo (subtitles cropped off, two logos for "A & B" folders);
+  universes named after no single film get their name set in type.
+- **Director**: the director cut out of their portrait with macOS Vision, in black and white over a colour
+  still from their films, with the name in New York serif.
 
 No film is used twice across all 247 covers. `build/hero_overrides.json` holds the hand-picked stills,
 `build/logo_overrides.json` the franchise logos, `build/tweaks.json` per-tile adjustments.
+`build/prep.py` trims and measures every logo, meters the stills and makes the cut-outs before
+`build/covers.py` renders.
 
-Covers are served from this repo at the `v1` tag
-(`https://raw.githubusercontent.com/mali-king/nuvio-collections/v1/covers/...`), so they never change
-under you. To publish new covers, push a new tag and rerun with `COVER_BASE` pointing at it.
+Covers are served from this repo at the `v2` tag
+(`https://raw.githubusercontent.com/mali-king/nuvio-collections/v2/covers/...`), so they never change
+under you; `v1` still holds the first set. To publish new covers, push a new tag and rerun with
+`COVER_BASE` pointing at it (or change the default in `build/build.py`).
 
 ## Import into the new account
 
@@ -66,8 +72,8 @@ under you. To publish new covers, push a new tag and rerun with `COVER_BASE` poi
 
 ## Rebuild
 
-Needs python3, ImageMagick, `cwebp`, node with Playwright, and a TMDB v3 key in `TMDB_API_KEY` or
-`build/.tmdbkey` (gitignored).
+Needs macOS with Xcode's `swiftc` (for the Vision cut-outs), python3, ImageMagick, `cwebp`, node with
+Playwright, and a TMDB v3 key in `TMDB_API_KEY` or `build/.tmdbkey` (gitignored).
 
 ```sh
 build/run.sh

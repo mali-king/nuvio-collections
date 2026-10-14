@@ -74,6 +74,25 @@ def candidates(folder, prefer=None, limit=40):
     return out[:limit] if limit else out
 
 
+def logo_file(src, jobs):
+    """Local path for a title-logo source ("file:", "n3:", "tmdb:/path.png" or "movie:ID"/"tv:ID"), queueing downloads."""
+    if not src:
+        return None
+    if src.startswith("file:"):
+        return os.path.join(HERE, src[5:])
+    if src.startswith("n3:"):
+        dest = os.path.join(IMG, "n3_" + src[3:].replace(".webp", ".png"))
+        if not os.path.exists(dest):
+            subprocess.run(["magick", n3_file(src[3:]), "-trim", "+repage", dest], check=True)
+        return dest
+    lp = src[5:] if src.startswith("tmdb:") else title_logo(*src.split(":"))
+    if not lp:
+        return None
+    dest = os.path.join(IMG, f"logo{lp.replace('/', '_')}")
+    jobs.append((tmdb.img(lp, "original"), dest))
+    return dest
+
+
 USED = set(HERO.values())
 
 
@@ -119,21 +138,14 @@ def plan():
                     entry["bg"] = os.path.join(IMG, f"bd{hp.replace('/', '_')}")
                     jobs.append((tmdb.img(hp, "original"), entry["bg"]))
                 if art["kind"] == "franchise":
-                    lk = LOGO.get(key) or hk
-                    entry["logo_src"] = lk
-                    if lk and lk.startswith("file:"):
-                        entry["logo"] = os.path.join(HERE, lk[5:])
-                    elif lk and lk.startswith("n3:"):
-                        dest = os.path.join(IMG, "n3_" + lk[3:].replace(".webp", ".png"))
-                        if not os.path.exists(dest):
-                            subprocess.run(["magick", n3_file(lk[3:]), "-trim", "+repage", dest], check=True)
-                        entry["logo"] = dest
-                    elif lk:
-                        m, tid = lk.split(":")
-                        lp = title_logo(m, tid)
-                        if lp:
-                            entry["logo"] = os.path.join(IMG, f"logo{lp.replace('/', '_')}")
-                            jobs.append((tmdb.img(lp, "original"), entry["logo"]))
+                    # An override is a source string, or {"src", "clean", "white", "and"} / {"typeset": [lines]}.
+                    opts = LOGO.get(key) or hk
+                    opts = opts if isinstance(opts, dict) else {"src": opts}
+                    entry["logo_src"] = opts.get("src")
+                    entry["logo_opts"] = {k: v for k, v in opts.items() if k in ("clean", "white", "typeset")}
+                    entry["logo"] = logo_file(opts.get("src"), jobs)
+                    if opts.get("and"):
+                        entry["logo2"] = logo_file(opts["and"], jobs)
             elif art["kind"] == "director":
                 pid = art["person"]
                 imgs = (tmdb.get(f"person/{pid}/images") or {}).get("profiles", [])

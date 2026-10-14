@@ -1,8 +1,35 @@
 {
- "indian-universes/drishyam": {"logoFilter": "brightness(0) invert(1)"},
- "streaming-services/amc-plus": {"logoScale": 1.2},
- "streaming-services/criterion-channel": {"logoScale": 1.15},
- "studios/mythri-movie-makers": {"logoScale": 0.8},
- "networks/abc": {"logoScale": 0.85},
- "networks/nbc": {"logoScale": 0.9}
+ "indian-universes/drishyam": {
+  "logoFilter": "brightness(0) invert(1)"
+ },
+ "streaming-services/amc-plus": {
+  "logoScale": 1.2
+ },
+ "streaming-services/criterion-channel": {
+  "logoScale": 1.15
+ },
+ "studios/mythri-movie-makers": {
+  "logoScale": 1.1
+ },
+ "networks/abc": {
+  "logoScale": 0.85
+ },
+ "networks/nbc": {
+  "logoScale": 0.9
+ },
+ "studios/red-chillies": {
+  "logoScale": 1.3
+ },
+ "studios/yash-raj-films": {
+  "logoScale": 1.25
+ },
+ "studios/warner-bros": {
+  "logoScale": 1.12
+ },
+ "studios/dreamworks-animation": {
+  "logoScale": 1.15
+ },
+ "franchises-and-universes/dune": {
+  "logoScale": 1.3
+ }
 }

@@ -5,11 +5,71 @@
  "franchises-and-universes/fast-and-furious": "movie:13804",
  "franchises-and-universes/jurassic-park": "movie:329",
  "franchises-and-universes/monsterverse": "movie:399566",
- "franchises-and-universes/mission-impossible": "movie:954",
+ "franchises-and-universes/mission-impossible": {
+  "src": "tmdb:/d4Nk4FAlEoHLNEny88SQ7Jk9ZsZ.png",
+  "white": true
+ },
  "franchises-and-universes/planet-of-the-apes": "movie:871",
  "franchises-and-universes/spider-man": "movie:557",
  "franchises-and-universes/x-men": "movie:36657",
  "franchises-and-universes/bourne": "movie:324668",
  "indian-universes/k-g-f": "movie:587412",
- "franchises-and-universes/james-bond": "file:static/bond_007.png"
+ "franchises-and-universes/james-bond": "file:static/bond_007.png",
+ "franchises-and-universes/indiana-jones": {
+  "src": "tmdb:/tPI0BNiiGbVAPIrO8kcBWajM6He.png",
+  "clean": true
+ },
+ "franchises-and-universes/middle-earth": {
+  "src": "tmdb:/Ro4z3jx9V7zwkv7adXweXn5SUR.png",
+  "clean": true
+ },
+ "franchises-and-universes/wizarding-world": {
+  "src": "tmdb:/hx1IKQVCrhsYcP8a1Qer8CN0XtD.png",
+  "clean": true
+ },
+ "franchises-and-universes/pirates-of-the-caribbean": {
+  "src": "tmdb:/iY77DYbp0yfwJajXPADRSXFjsYa.png",
+  "clean": true
+ },
+ "franchises-and-universes/john-wick": "tmdb:/77YSn1XL3KFDcmIQGWE0Y0Tj7jB.png",
+ "franchises-and-universes/the-terminator": "tmdb:/hdVL9WCFXxCFrsWH0R8UnhptHso.png",
+ "franchises-and-universes/alien-and-predator": {
+  "src": "tmdb:/b1Yd3yILm6G6khVL9j7Sj5wj4nk.png",
+  "and": "tmdb:/mPX6xfaGp0R6QKZ8nmaEoZfMKtG.png"
+ },
+ "franchises-and-universes/rocky-and-creed": {
+  "src": "movie:1366",
+  "and": "tmdb:/Al4f6NqlAZV50JXFJbfMNOZLiZP.png"
+ },
+ "franchises-and-universes/mad-max": "tmdb:/ozPO9poThe6TKlH7OvHauYn9NtK.png",
+ "indian-universes/baahubali": {
+  "src": "tmdb:/nm7JvSYOBqWvOxVyB4r6NDyX7zO.png",
+  "clean": true
+ },
+ "indian-universes/pushpa": "tmdb:/isY1QO77JfcjSnsR7t4oyt23ZOa.png",
+ "indian-universes/dhoom": "tmdb:/uQFrimJ2jUpWMOqDvSPVDgwIqa8.png",
+ "indian-universes/yrf-spy-universe": {
+  "typeset": [
+   "YRF Spy",
+   "Universe"
+  ]
+ },
+ "indian-universes/cop-universe": {
+  "typeset": [
+   "Cop",
+   "Universe"
+  ]
+ },
+ "indian-universes/lokesh-cinematic-universe": {
+  "typeset": [
+   "Lokesh Cinematic",
+   "Universe"
+  ]
+ },
+ "indian-universes/horror-comedy-universe": {
+  "typeset": [
+   "Horror Comedy",
+   "Universe"
+  ]
+ }
 }

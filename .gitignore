@@ -10,4 +10,5 @@ build/__pycache__/
 build/collections.full.json
 build/art_plan.json
 build/logos.json
+build/prep.json
 node_modules/

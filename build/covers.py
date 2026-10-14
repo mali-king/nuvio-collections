@@ -1,6 +1,11 @@
-"""Render every collection cover (1600x900 WebP) from art_plan.json with HTML templates + Playwright."""
+"""Render every collection cover (1600x900 WebP) from art_plan.json + prep.json with HTML templates + Playwright.
+
+Nuvio draws a folder tile about 288pt wide on the Mac and 206pt on a phone, so one canvas pixel is 0.13-0.18pt.
+Nothing here is smaller than ~70px for that reason: type that would land under ~9pt on the phone is left out.
+"""
 import html
 import json
+import math
 import os
 import subprocess
 import sys
@@ -9,20 +14,16 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGES = os.path.join(HERE, "pages")
 PNG = os.path.join(HERE, "png")
-OUT = os.path.join(HERE, "..", "covers")
+OUT = os.environ.get("COVERS_OUT") or os.path.join(HERE, "..", "covers")
 W, H = 1600, 900
 
 plan = json.load(open(os.path.join(HERE, "art_plan.json")))
 logos = json.load(open(os.path.join(HERE, "logos.json")))
+prep = json.load(open(os.path.join(HERE, "prep.json")))
 
-KICKER = {
-    "genres": "Genre", "indian-cinema": "Indian Cinema", "world-cinema": "World Cinema",
-    "moods-and-themes": "Mood", "decades": "Decade", "critics-picks": "Critics’ Picks",
-}
 ACCENT = {
     "genres": "#F5B841", "indian-cinema": "#FF9F43", "world-cinema": "#4FD1C5",
     "moods-and-themes": "#B794F4", "decades": "#E8C170", "critics-picks": "#F6E05E",
-    "franchises-and-universes": "#FFFFFF", "indian-universes": "#FF9F43", "directors": "#FFFFFF",
 }
 NATIVE = {
     "indian-cinema/bollywood": "हिन्दी सिनेमा", "indian-cinema/telugu": "తెలుగు",
@@ -34,7 +35,22 @@ NATIVE = {
     "world-cinema/italian": "Italiano", "world-cinema/german": "Deutsch", "world-cinema/nordic": "Norden",
     "world-cinema/thai": "ไทย", "world-cinema/filipino": "Pilipino", "world-cinema/arabic": "عربي",
 }
-# Optional per-tile tweaks: {"key": {"pos": "70% 30%", "logoScale": 0.8, ...}}
+# Brand tint behind the logo. Measured from the logo's own colour unless set here; None = neutral grey.
+TINT = {
+    "streaming-services/apple-tv": "#8e9bb0", "streaming-services/disney-plus": "#1f4fe0",
+    "streaming-services/hbo-max": "#6a2cf0", "streaming-services/mubi": "#3550ff",
+    "streaming-services/amc-plus": None, "streaming-services/criterion-channel": None,
+    "indian-streaming/sonyliv": "#7b3fe4", "indian-streaming/zee5": "#8230c6",
+    "indian-streaming/amazon-mx-player": "#2f8cff", "indian-streaming/sun-nxt": "#e8432d",
+    "indian-streaming/lionsgate-play": None, "indian-streaming/shemaroome": "#ff8a00",
+    "studios/pixar": "#3b82f6", "studios/walt-disney-animation": "#2f6fe0", "studios/walt-disney-pictures": "#2f6fe0",
+    "studios/dreamworks-animation": "#4a90e2", "studios/illumination": "#f5c518", "studios/studio-ghibli": "#3a86d8",
+    "studios/20th-century": "#d9a53a", "studios/neon": "#ff3ec8", "studios/blumhouse": "#c0392b",
+    "studios/searchlight": "#d9a53a", "studios/toho": "#d0303a", "studios/mappa": None,
+    "studios/hombale-films": "#d9a53a",
+    "networks/cbs": "#2f6fe0", "networks/disney-channel": "#2f6fe0", "networks/discovery": "#2f6fe0",
+    "networks/cartoon-network": None,
+}
 TWEAKS = json.load(open(os.path.join(HERE, "tweaks.json"))) if os.path.exists(os.path.join(HERE, "tweaks.json")) else {}
 
 BASE_CSS = f"""
@@ -57,101 +73,162 @@ def esc(s):
     return html.escape(s or "")
 
 
-def title_size(t, base=150):
+def exposure(bg, base, target=0.34):
+    """Brightness that brings a still's average luminance near the target, so dark and bright stills read alike."""
+    st = prep["stills"].get(bg) or {}
+    mean = max(st.get("mean", target), 0.05)
+    return round(base * min(1.45, max(0.78, (target / mean) ** 0.6)), 3)
+
+
+def fit(w, h, area, max_w, max_h, cov=None):
+    """Size a mark by area rather than by box, so wide and square logos read at the same optical weight.
+
+    cov is the share of the box that is ink: airy marks (thin type, outlines) get up to 1.7x the area, solid blocks a little less."""
+    if cov:
+        area *= min(1.7, max(0.8, (0.42 / cov) ** 0.6))
+    ar = w / max(h, 1)
+    fw, fh = math.sqrt(area * ar), math.sqrt(area / ar)
+    k = min(1.0, max_w / fw, max_h / fh)
+    return int(fw * k), int(fh * k)
+
+
+def logo_meta(path):
+    return prep["logos"].get(path) or {}
+
+
+# Fit the title in the browser: one line as large as fits (down to 150px), else two balanced lines up to 176px.
+FIT_JS = """<script>
+(function () {
+  const t = document.querySelector('.title');
+  const w = t.parentElement.clientWidth;
+  t.classList.add('one');
+  for (let s = 200; s >= 150; s -= 2) { t.style.fontSize = s + 'px'; if (t.scrollWidth <= w) return; }
+  t.classList.remove('one');
+  for (let s = 176; s >= 96; s -= 2) {
+    t.style.fontSize = s + 'px';
+    const words = t.textContent.split(' ');
+    const lines = Math.round(t.getBoundingClientRect().height / (s * 0.92));
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:inherit;letter-spacing:inherit';
+    t.appendChild(probe);
+    const widest = Math.max(...words.map(x => { probe.textContent = x; return probe.getBoundingClientRect().width; }));
+    probe.remove();
+    if (lines <= 2 && widest <= w) return;
+  }
+})();
+</script>"""
+
+
+def title_size(t, sizes=(200, 172, 150, 132, 120)):
     n = len(t)
-    if n <= 8:
-        return base
-    if n <= 12:
-        return int(base * .86)
-    if n <= 16:
-        return int(base * .74)
-    if n <= 22:
-        return int(base * .64)
-    return int(base * .56)
+    return sizes[0] if n <= 8 else sizes[1] if n <= 12 else sizes[2] if n <= 16 else sizes[3] if n <= 22 else sizes[4]
 
 
 def scene(e, key):
     tw = TWEAKS.get(key, {})
     accent = ACCENT.get(e["collection"], "#fff")
     native = NATIVE.get(key)
-    kicker = KICKER.get(e["collection"], "")
     size = tw.get("size") or title_size(e["title"])
+    bright = exposure(e["bg"], tw.get("bright", 0.9))
     native_html = f'<div class="native">{esc(native)}</div>' if native else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>{BASE_CSS}
-.bg{{filter:saturate({tw.get('sat', .95)}) contrast(1.06) brightness({tw.get('bright', .86)})}}
-.g1{{background:linear-gradient(90deg,rgba(6,6,9,.94) 0%,rgba(6,6,9,.72) 30%,rgba(6,6,9,.18) 62%,rgba(6,6,9,0) 78%)}}
-.g2{{background:linear-gradient(0deg,rgba(6,6,9,.88) 0%,rgba(6,6,9,.25) 38%,rgba(6,6,9,0) 60%)}}
-.g3{{background:radial-gradient(120% 90% at 100% 0%,rgba(0,0,0,0) 40%,rgba(0,0,0,.35) 100%)}}
-.text{{position:absolute;left:104px;bottom:96px;right:40%}}
-.bar{{width:64px;height:7px;border-radius:4px;background:{accent};margin-bottom:26px;box-shadow:0 0 24px {accent}88}}
-.kicker{{font-size:30px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:14px}}
-.title{{font-size:{size}px;font-weight:800;letter-spacing:-.035em;line-height:.95;text-shadow:0 4px 40px rgba(0,0,0,.45)}}
-.native{{margin-top:22px;font-size:46px;font-weight:600;color:{accent};opacity:.95;letter-spacing:.01em}}
+.bg{{filter:saturate({tw.get('sat', 1)}) contrast(1.06) brightness({bright})}}
+.g1{{background:linear-gradient(90deg,rgba(6,6,9,.9) 0%,rgba(6,6,9,.62) 32%,rgba(6,6,9,.12) 62%,rgba(6,6,9,0) 76%)}}
+.g2{{background:linear-gradient(0deg,rgba(6,6,9,.9) 0%,rgba(6,6,9,.35) 40%,rgba(6,6,9,0) 64%)}}
+.g3{{background:radial-gradient(120% 90% at 100% 0%,rgba(0,0,0,0) 45%,rgba(0,0,0,.3) 100%)}}
+.text{{position:absolute;left:96px;bottom:92px;width:64%}}
+.bar{{width:120px;height:14px;border-radius:7px;background:{accent};margin-bottom:34px;box-shadow:0 0 32px {accent}99}}
+.title{{font-size:{size}px;font-weight:800;letter-spacing:-.035em;line-height:.92;text-wrap:balance;
+  text-shadow:0 6px 50px rgba(0,0,0,.5)}}
+.title.one{{white-space:nowrap}}
+.native{{margin-top:26px;font-size:84px;font-weight:700;color:{accent};letter-spacing:.005em;line-height:1.1;
+  text-shadow:0 4px 30px rgba(0,0,0,.5)}}
 </style></head><body>
 <div class="bg" style="background-image:url('{url(e['bg'])}');--pos:{tw.get('pos', 'center')}"></div>
 <div class="layer g1"></div><div class="layer g2"></div><div class="layer g3"></div><div class="noise"></div>
-<div class="text"><div class="bar"></div><div class="kicker">{esc(kicker)}</div><div class="title">{esc(e['title'])}</div>{native_html}</div>
-<div class="frame"></div></body></html>"""
+<div class="text"><div class="bar"></div><div class="title">{esc(e['title'])}</div>{native_html}</div>
+<div class="frame"></div>{FIT_JS if not tw.get('size') else ''}</body></html>"""
+
+
+def franchise_mark(e, tw):
+    opts = e.get("logo_opts") or {}
+    white = "brightness(0) invert(1) " if opts.get("white") else ""
+    flt = f"{tw.get('logoFilter', '')} {white}drop-shadow(0 10px 50px rgba(0,0,0,.75))"
+    scale = tw.get("logoScale", 1.0)
+    if opts.get("typeset"):
+        first, second = opts["typeset"]
+        fs = 168 if len(first) <= 8 else 140 if len(first) <= 12 else 118
+        return (f'<div class="ts"><div class="ts1" style="font-size:{fs}px">{esc(first)}</div>'
+                f'<div class="ts2">{esc(second)}</div></div>')
+    if e.get("logo") and e.get("logo2"):
+        m1, m2 = logo_meta(e["logo"]), logo_meta(e["logo2"])
+        w1, h1 = fit(m1["w"], m1["h"], 95000 * scale, 720, 220, m1.get("cov"))
+        w2, h2 = fit(m2["w"], m2["h"], 95000 * scale, 720, 220, m2.get("cov"))
+        return (f'<img class="logo" src="{url(m1["png"])}" style="width:{w1}px;height:{h1}px;filter:{flt}">'
+                f'<div class="amp">&amp;</div>'
+                f'<img class="logo" src="{url(m2["png"])}" style="width:{w2}px;height:{h2}px;filter:{flt}">')
+    if e.get("logo"):
+        m = logo_meta(e["logo"])
+        w, h = fit(m["w"], m["h"], 210000 * scale, 860, 400, m.get("cov"))
+        return f'<img class="logo" src="{url(m["png"])}" style="width:{w}px;height:{h}px;filter:{flt}">'
+    return f'<div class="ts"><div class="ts1" style="font-size:{title_size(e["title"], (176, 150, 128, 112, 100))}px">{esc(e["title"])}</div></div>'
 
 
 def franchise(e, key):
     tw = TWEAKS.get(key, {})
-    logo = e.get("logo")
-    lf = tw.get("logoFilter", "none")
-    lw, lh = tw.get("logoW", 46), tw.get("logoH", 36)
-    if logo:
-        mark = f'<img class="logo" src="{url(logo)}" style="filter:{lf} drop-shadow(0 10px 40px rgba(0,0,0,.65))">'
-    else:
-        mark = f'<div class="ttl">{esc(e["title"])}</div>'
-    kicker = "Universe" if "universe" in e["title"].lower() or e["collection"] == "indian-universes" else "Collection"
+    bright = exposure(e["bg"], tw.get("bright", 0.88), target=0.32)
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>{BASE_CSS}
-.bg{{filter:saturate(1.02) contrast(1.05) brightness({tw.get('bright', .8)})}}
-.g1{{background:linear-gradient(90deg,rgba(5,5,8,.9) 0%,rgba(5,5,8,.62) 34%,rgba(5,5,8,.08) 66%,rgba(5,5,8,0) 80%)}}
-.g2{{background:linear-gradient(0deg,rgba(5,5,8,.8) 0%,rgba(5,5,8,0) 46%)}}
-.wrap{{position:absolute;left:100px;top:0;bottom:0;width:{lw}%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}}
-.logo{{width:100%;height:{lh * H / 100}px;object-fit:contain;object-position:left center}}
-.ttl{{font-size:{title_size(e['title'], 132)}px;font-weight:800;letter-spacing:-.03em;line-height:.95}}
-.kicker{{position:absolute;left:104px;bottom:80px;font-size:26px;font-weight:700;letter-spacing:.32em;text-transform:uppercase;color:rgba(255,255,255,.6)}}
+.bg{{filter:saturate(1.04) contrast(1.05) brightness({bright})}}
+.g1{{background:linear-gradient(90deg,rgba(5,5,8,.88) 0%,rgba(5,5,8,.6) 34%,rgba(5,5,8,.08) 64%,rgba(5,5,8,0) 78%)}}
+.g2{{background:linear-gradient(0deg,rgba(5,5,8,.7) 0%,rgba(5,5,8,0) 42%)}}
+.wrap{{position:absolute;left:96px;top:0;bottom:0;width:56%;display:flex;flex-direction:column;justify-content:center;
+  align-items:flex-start;gap:6px;padding-top:{tw.get('logoY', 20)}px}}
+.logo{{display:block;object-fit:contain;object-position:left center}}
+.amp{{font-family:"New York","Iowan Old Style",Georgia,serif;font-style:italic;font-size:92px;line-height:1;
+  color:rgba(255,255,255,.85);margin:4px 0 8px 6px;text-shadow:0 4px 30px rgba(0,0,0,.6)}}
+.ts1{{font-weight:800;letter-spacing:-.035em;line-height:.92;text-wrap:balance;text-shadow:0 6px 50px rgba(0,0,0,.55)}}
+.ts2{{margin-top:20px;font-size:64px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#FF9F43;
+  text-shadow:0 4px 30px rgba(0,0,0,.5)}}
 </style></head><body>
 <div class="bg" style="background-image:url('{url(e['bg'])}');--pos:{tw.get('pos', 'center')}"></div>
 <div class="layer g1"></div><div class="layer g2"></div><div class="noise"></div>
-<div class="wrap">{mark}</div><div class="kicker">{kicker}</div>
+<div class="wrap">{franchise_mark(e, tw)}</div>
 <div class="frame"></div></body></html>"""
+
+
+SPLIT = {"Bong Joon Ho": ("Bong", "Joon Ho"), "Wong Kar-wai": ("Wong", "Kar-wai"),
+         "Park Chan-wook": ("Park", "Chan-wook"), "S. S. Rajamouli": ("S. S.", "Rajamouli"),
+         "Guillermo del Toro": ("Guillermo", "del Toro"), "Paul Thomas Anderson": ("Paul Thomas", "Anderson"),
+         "Sanjay Leela Bhansali": ("Sanjay Leela", "Bhansali")}
 
 
 def director(e, key):
     tw = TWEAKS.get(key, {})
-    films = " · ".join(esc(f) for f in (e.get("films") or [])[:3])
     parts = e["title"].split(" ")
-    first, last = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", parts[0])
-    if e["title"] in ("Bong Joon Ho", "Wong Kar-wai", "Park Chan-wook", "S. S. Rajamouli", "Guillermo del Toro",
-                      "Paul Thomas Anderson", "Sanjay Leela Bhansali"):
-        first, last = {"Bong Joon Ho": ("Bong", "Joon Ho"), "Wong Kar-wai": ("Wong", "Kar-wai"),
-                       "Park Chan-wook": ("Park", "Chan-wook"), "S. S. Rajamouli": ("S. S.", "Rajamouli"),
-                       "Guillermo del Toro": ("Guillermo", "del Toro"),
-                       "Paul Thomas Anderson": ("Paul Thomas", "Anderson"),
-                       "Sanjay Leela Bhansali": ("Sanjay Leela", "Bhansali")}[e["title"]]
-    lsize = 128 if len(last) <= 9 else (108 if len(last) <= 12 else 92)
-    portrait = e.get("portrait")
+    first, last = SPLIT.get(e["title"]) or ((" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", parts[0]))
+    lsize = 176 if len(last) <= 7 else 156 if len(last) <= 9 else 132 if len(last) <= 11 else 116
+    cut = prep["cutouts"].get(key)
+    bright = exposure(e["bg"], tw.get("bright", 0.5), target=0.3)
+    person = (f'<img class="cut" src="{url(cut)}">' if cut else
+              f'<div class="portrait" style="background-image:url(\'{url(e.get("portrait", ""))}\')"></div>')
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>{BASE_CSS}
-.bg{{filter:grayscale(1) brightness(.34) contrast(1.1) blur(1px);transform:scale(1.02)}}
-.tint{{background:linear-gradient(90deg,rgba(8,8,10,.96) 0%,rgba(8,8,10,.8) 40%,rgba(8,8,10,.2) 100%)}}
-.portrait{{position:absolute;right:0;top:0;height:100%;width:62%;background-size:cover;background-position:{tw.get('pos', 'center 22%')};
-  filter:grayscale(1) contrast(1.12) brightness(.95);
-  -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.55) 22%,#000 48%);}}
-.glow{{background:radial-gradient(70% 90% at 78% 40%,rgba(255,255,255,.07),transparent 70%)}}
-.text{{position:absolute;left:104px;bottom:100px;width:56%}}
-.kicker{{font-size:26px;font-weight:700;letter-spacing:.34em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:22px}}
-.first{{font-family:"New York","Iowan Old Style",Georgia,serif;font-size:62px;font-weight:400;font-style:italic;color:rgba(255,255,255,.86);line-height:1}}
-.last{{font-family:"New York","Iowan Old Style",Georgia,serif;font-size:{lsize}px;font-weight:600;letter-spacing:-.01em;line-height:1.02}}
-.films{{margin-top:26px;font-size:28px;font-weight:500;color:rgba(255,255,255,.62);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-.rule{{width:72px;height:3px;background:#fff;opacity:.7;margin:28px 0 0}}
+.bg{{filter:saturate(.7) contrast(1.05) brightness({bright}) blur(3px);transform:scale(1.06)}}
+.tint{{background:linear-gradient(90deg,rgba(8,8,10,.94) 0%,rgba(8,8,10,.7) 38%,rgba(8,8,10,.15) 72%,rgba(8,8,10,.35) 100%)}}
+.floor{{background:linear-gradient(0deg,rgba(8,8,10,.55) 0%,rgba(8,8,10,0) 30%)}}
+.cut{{position:absolute;right:{tw.get('cutRight', 40)}px;bottom:0;height:{tw.get('cutH', 100)}%;max-width:62%;object-fit:contain;
+  object-position:right bottom;filter:grayscale(1) contrast(1.12) brightness(1.04) drop-shadow(-40px 0 70px rgba(0,0,0,.7))}}
+.portrait{{position:absolute;right:0;top:0;height:100%;width:60%;background-size:cover;background-position:center 22%;
+  filter:grayscale(1) contrast(1.1);-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 45%)}}
+.text{{position:absolute;left:96px;bottom:96px;width:54%}}
+.first{{font-family:"New York","Iowan Old Style",Georgia,serif;font-size:84px;font-weight:400;font-style:italic;
+  color:rgba(255,255,255,.88);line-height:1.05}}
+.last{{font-family:"New York","Iowan Old Style",Georgia,serif;font-size:{lsize}px;font-weight:600;letter-spacing:-.015em;
+  line-height:.98;white-space:nowrap}}
+.rule{{width:120px;height:8px;border-radius:4px;background:#fff;opacity:.85;margin-bottom:36px}}
 </style></head><body>
 <div class="bg" style="background-image:url('{url(e['bg'])}')"></div><div class="layer tint"></div>
-<div class="portrait" style="background-image:url('{url(portrait) if portrait else ''}')"></div>
-<div class="layer glow"></div><div class="noise"></div>
-<div class="text"><div class="kicker">A film by</div><div class="first">{esc(first)}</div><div class="last">{esc(last)}</div>
-<div class="rule"></div><div class="films">{films}</div></div>
+{person}<div class="layer floor"></div><div class="noise"></div>
+<div class="text"><div class="rule"></div><div class="first">{esc(first)}</div><div class="last">{esc(last)}</div></div>
 <div class="frame"></div></body></html>"""
 
 
@@ -159,6 +236,8 @@ def brand(e, key):
     tw = TWEAKS.get(key, {})
     lg = logos.get(e["logo_key"]) or {}
     mode = lg.get("mode", "color")
+    meta = logo_meta(lg.get("path"))
+    tint = TINT[key] if key in TINT else meta.get("colour")
     posters = e.get("posters", [])
     while posters and len(posters) < 21:
         posters = posters + posters
@@ -167,33 +246,41 @@ def brand(e, key):
     scale = tw.get("logoScale", 1.0)
     if mode == "icon":
         name = e["title"].replace(" India", "")
-        mark = (f'<div class="iconrow"><img class="icon" src="{url(lg["path"])}">'
-                f'<div class="iname">{esc(name)}</div></div>')
-    elif mode == "text":
+        fs = 116 if len(name) <= 10 else 100 if len(name) <= 14 else 88
+        mark = (f'<div class="iconrow"><img class="icon" src="{url(meta.get("png", lg["path"]))}">'
+                f'<div class="iname" style="font-size:{int(fs * scale)}px">{esc(name)}</div></div>')
+    elif mode == "text" or not meta:
         mark = f'<div class="tname">{esc(lg.get("text") or e["title"])}</div>'
     else:
-        flt = {"white": "brightness(0) invert(1)", "invert": "invert(1)", "color": "none"}[mode]
-        mark = (f'<img class="logo" src="{url(lg["path"])}" style="filter:{flt} drop-shadow(0 10px 36px rgba(0,0,0,.7));'
-                f'width:{int(760 * scale)}px;height:{int(250 * scale)}px">')
+        flt = {"white": "brightness(0) invert(1)", "invert": "invert(1)", "color": ""}[mode]
+        w, h = fit(meta["w"], meta["h"], 230000 * scale ** 2, 1000, 380, meta.get("cov"))
+        mark = (f'<img class="logo" src="{url(meta["png"])}" style="filter:{flt} drop-shadow(0 12px 40px rgba(0,0,0,.75));'
+                f'width:{w}px;height:{h}px">')
     badge = f'<div class="badge">{esc(e["badge"])}</div>' if e.get("badge") else ""
+    glow = (f".tint{{background:radial-gradient(52% 62% at 50% 50%,{tint}66 0%,{tint}26 48%,{tint}00 78%)}}"
+            f".hue{{background:{tint};mix-blend-mode:color;opacity:.32}}") if tint else (
+        ".tint{background:radial-gradient(52% 62% at 50% 50%,rgba(170,180,200,.16) 0%,rgba(170,180,200,0) 75%)}"
+        ".hue{display:none}")
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>{BASE_CSS}
 body{{background:#09090d}}
 .wall{{position:absolute;left:50%;top:50%;width:2350px;display:grid;grid-template-columns:repeat(7,1fr);gap:22px;
   transform:translate(-50%,-50%) rotate(-11deg) scale(1.02)}}
 .p{{aspect-ratio:2/3;border-radius:14px;background-size:cover;background-position:center;
-  filter:saturate(.95) brightness(.62);box-shadow:0 18px 40px rgba(0,0,0,.5)}}
-.shade{{background:radial-gradient(58% 62% at 50% 50%,rgba(6,6,9,.86) 0%,rgba(6,6,9,.62) 55%,rgba(6,6,9,.35) 100%)}}
-.edge{{background:linear-gradient(0deg,rgba(6,6,9,.6),rgba(6,6,9,0) 30%,rgba(6,6,9,0) 70%,rgba(6,6,9,.5))}}
+  filter:saturate(.9) brightness(.6);box-shadow:0 18px 40px rgba(0,0,0,.5)}}
+.shade{{background:radial-gradient(58% 64% at 50% 50%,rgba(6,6,9,.82) 0%,rgba(6,6,9,.6) 55%,rgba(6,6,9,.4) 100%)}}
+.edge{{background:linear-gradient(0deg,rgba(6,6,9,.65),rgba(6,6,9,0) 32%,rgba(6,6,9,0) 68%,rgba(6,6,9,.55))}}
+{glow}
 .center{{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}}
 .logo{{object-fit:contain}}
-.iconrow{{display:flex;align-items:center;gap:44px}}
-.icon{{width:{int(210 * scale)}px;height:{int(210 * scale)}px;border-radius:24%;box-shadow:0 18px 50px rgba(0,0,0,.6)}}
-.iname{{font-size:{int(112 * scale)}px;font-weight:800;letter-spacing:-.03em}}
-.tname{{font-size:120px;font-weight:800;letter-spacing:-.03em}}
-.badge{{margin-top:34px;font-size:30px;font-weight:700;letter-spacing:.45em;text-transform:uppercase;padding:12px 26px 12px 38px;
-  border:2px solid rgba(255,255,255,.55);border-radius:999px;color:#fff}}
+.iconrow{{display:flex;align-items:center;gap:48px}}
+.icon{{width:{int(230 * scale)}px;height:{int(230 * scale)}px;border-radius:24%;box-shadow:0 18px 50px rgba(0,0,0,.6)}}
+.iname{{font-weight:800;letter-spacing:-.03em;line-height:1}}
+.tname{{font-size:140px;font-weight:800;letter-spacing:-.03em}}
+.badge{{margin-top:44px;font-size:46px;font-weight:800;letter-spacing:.4em;text-transform:uppercase;padding:14px 30px 14px 48px;
+  border:4px solid rgba(255,255,255,.7);border-radius:999px;color:#fff;background:rgba(0,0,0,.25)}}
 </style></head><body>
-<div class="wall">{tiles}</div><div class="layer shade"></div><div class="layer edge"></div><div class="noise"></div>
+<div class="wall">{tiles}</div><div class="layer hue"></div><div class="layer shade"></div><div class="layer edge"></div>
+<div class="layer tint"></div><div class="noise"></div>
 <div class="center">{mark}{badge}</div><div class="frame"></div></body></html>"""
 
 

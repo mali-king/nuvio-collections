@@ -28,7 +28,7 @@ const fs = require("fs");
         await page.goto("file://" + job.html, { waitUntil: "load" });
         await page.evaluate(() => document.fonts.ready);
         await page.waitForFunction(() => Array.from(document.images).every((i) => i.complete), null, { timeout: 30000 });
-        await page.screenshot({ path: job.out, fullPage: !!job.fullPage, type: "png" });
+        await page.screenshot({ path: job.out, fullPage: !!job.fullPage, type: "png", omitBackground: !!job.transparent });
       } catch (e) {
         failures.push(job.out + " :: " + e.message.split("\n")[0]);
       }

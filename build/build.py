@@ -13,7 +13,7 @@ from spec import (FLOORS, NOISE_TV, collection, company, director, discover, net
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NS = uuid.UUID("6f1d3c2a-9b7e-4c55-8a10-5e0c7d1b2a99")
-CDN = os.environ.get("COVER_BASE", "https://raw.githubusercontent.com/mali-king/nuvio-collections/v1")
+CDN = os.environ.get("COVER_BASE", "https://raw.githubusercontent.com/mali-king/nuvio-collections/v2")
 
 
 def slug(s):
