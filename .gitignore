@@ -1,0 +1,13 @@
+.DS_Store
+build/.tmdbkey
+build/.venv/
+build/cache/
+build/assets/
+build/pages/
+build/png/
+build/jobs_*.json
+build/__pycache__/
+build/collections.full.json
+build/art_plan.json
+build/logos.json
+node_modules/

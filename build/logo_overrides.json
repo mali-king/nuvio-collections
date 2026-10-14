@@ -1,0 +1,15 @@
+{
+ "franchises-and-universes/star-wars": "n3:studios__title__star-wars.webp",
+ "franchises-and-universes/marvel-cinematic-universe": "n3:studios__cover__marvel.webp",
+ "franchises-and-universes/dc-universe": "n3:studios__cover__dc.webp",
+ "franchises-and-universes/fast-and-furious": "movie:13804",
+ "franchises-and-universes/jurassic-park": "movie:329",
+ "franchises-and-universes/monsterverse": "movie:399566",
+ "franchises-and-universes/mission-impossible": "movie:954",
+ "franchises-and-universes/planet-of-the-apes": "movie:871",
+ "franchises-and-universes/spider-man": "movie:557",
+ "franchises-and-universes/x-men": "movie:36657",
+ "franchises-and-universes/bourne": "movie:324668",
+ "indian-universes/k-g-f": "movie:587412",
+ "franchises-and-universes/james-bond": "file:static/bond_007.png"
+}

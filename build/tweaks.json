@@ -1,0 +1,8 @@
+{
+ "indian-universes/drishyam": {"logoFilter": "brightness(0) invert(1)"},
+ "streaming-services/amc-plus": {"logoScale": 1.2},
+ "streaming-services/criterion-channel": {"logoScale": 1.15},
+ "studios/mythri-movie-makers": {"logoScale": 0.8},
+ "networks/abc": {"logoScale": 0.85},
+ "networks/nbc": {"logoScale": 0.9}
+}
